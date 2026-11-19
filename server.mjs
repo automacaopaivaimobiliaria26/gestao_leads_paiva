@@ -68,8 +68,8 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, await nocodb(table, 'PATCH', '', [{ Id: recordId, ...record }]));
       }
       if (req.method === 'DELETE' && recordId) {
-        await nocodb(table, 'DELETE', `/${encodeURIComponent(recordId)}`);
-        return json(res, 200, { ok: true });
+        // NocoDB v2 bulk delete accepts record identifiers in the request body.
+        return json(res, 200, await nocodb(table, 'DELETE', '', [{ Id: recordId }]));
       }
       return json(res, 405, { error: 'Método não permitido.' });
     } catch (error) { return json(res, error.status || 502, { error: error.message }); }
