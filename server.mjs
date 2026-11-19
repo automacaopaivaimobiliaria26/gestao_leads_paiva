@@ -1,5 +1,4 @@
 import http from 'node:http';
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -16,9 +15,8 @@ try {
 
 const config = {
   base: (process.env.NOCODB_BASE_URL || '').replace(/\/$/, ''),
+  basePath: (process.env.DASHBOARD_BASE_PATH || '').trim().replace(/\/$/, ''),
   token: process.env.NOCODB_API_TOKEN || '',
-  username: process.env.DASHBOARD_USERNAME || '',
-  password: process.env.DASHBOARD_PASSWORD || '',
   tables: { leads: process.env.NOCODB_LEADS_TABLE_ID || '', eventos: process.env.NOCODB_EVENTOS_TABLE_ID || '' },
 };
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
@@ -26,15 +24,6 @@ const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'a
 const readBody = async req => {
   let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error('Payload muito grande.'); }
   return raw ? JSON.parse(raw) : {};
-};
-const digest = value => createHash('sha256').update(value).digest();
-const authorized = req => {
-  const header = req.headers.authorization || '';
-  if (!header.startsWith('Basic ') || !config.username || !config.password) return false;
-  let decoded; try { decoded = Buffer.from(header.slice(6), 'base64').toString('utf8'); } catch { return false; }
-  const splitAt = decoded.indexOf(':'); if (splitAt < 0) return false;
-  const user = decoded.slice(0, splitAt), pass = decoded.slice(splitAt + 1);
-  return timingSafeEqual(digest(user), digest(config.username)) && timingSafeEqual(digest(pass), digest(config.password));
 };
 const nocodb = async (table, method, suffix = '', body) => {
   const url = `${config.base}/api/v2/tables/${encodeURIComponent(table)}/records${suffix}`;
@@ -46,20 +35,20 @@ const nocodb = async (table, method, suffix = '', body) => {
 };
 
 const server = http.createServer(async (req, res) => {
-  // Basic Auth protects both the dashboard and every data endpoint.
-  if (!config.username || !config.password) return json(res, 503, { error: 'Configure DASHBOARD_USERNAME e DASHBOARD_PASSWORD nas variáveis da aplicação.' });
-  if (!authorized(req)) {
-    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Dashboard Leads e Eventos", charset="UTF-8"', 'Cache-Control': 'no-store' });
-    return res.end('Autenticação necessária.');
-  }
+  // Configure HTTP Basic Auth in Easypanel's Security tab for every attached domain.
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Cache-Control', 'no-store');
   const url = new URL(req.url, 'http://localhost');
-  if (url.pathname.startsWith('/api/')) {
+  // Easypanel can forward a path domain with or without stripping the prefix.
+  // Accept both forms so the same image works with either proxy behavior.
+  const routePath = config.basePath && (url.pathname === config.basePath || url.pathname.startsWith(`${config.basePath}/`))
+    ? (url.pathname.slice(config.basePath.length) || '/')
+    : url.pathname;
+  if (routePath.startsWith('/api/')) {
     if (!config.base || !config.token || !config.tables.leads || !config.tables.eventos) return json(res, 503, { error: 'Configure URL, token e Table IDs no arquivo .env e reinicie o servidor.' });
-    const match = url.pathname.match(/^\/api\/(leads|eventos)(?:\/([^/]+))?$/);
+    const match = routePath.match(/^\/api\/(leads|eventos)(?:\/([^/]+))?$/);
     if (!match) return json(res, 404, { error: 'Endpoint não encontrado.' });
     const [, resource, recordId] = match; const table = config.tables[resource];
     try {
@@ -84,7 +73,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 405, { error: 'Método não permitido.' });
     } catch (error) { return json(res, error.status || 502, { error: error.message }); }
   }
-  const filePath = url.pathname === '/' ? path.join(here, 'public', 'index.html') : path.join(here, 'public', path.basename(url.pathname));
+  const filePath = routePath === '/' || routePath === config.basePath ? path.join(here, 'public', 'index.html') : path.join(here, 'public', path.basename(routePath));
   try { const content = await readFile(filePath); res.writeHead(200, { 'Content-Type': mime[path.extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff' }); res.end(content); }
   catch { res.writeHead(404); res.end('Não encontrado'); }
 });
