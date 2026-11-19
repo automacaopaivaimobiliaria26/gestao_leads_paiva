@@ -64,7 +64,8 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === 'PATCH' && recordId) {
         const record = await readBody(req);
-        return json(res, 200, await nocodb(table, 'PATCH', `/${encodeURIComponent(recordId)}`, record));
+        // NocoDB API v2 updates rows through PATCH /records with an Id in each row.
+        return json(res, 200, await nocodb(table, 'PATCH', '', [{ Id: recordId, ...record }]));
       }
       if (req.method === 'DELETE' && recordId) {
         await nocodb(table, 'DELETE', `/${encodeURIComponent(recordId)}`);
