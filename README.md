@@ -36,4 +36,4 @@ No NocoDB, abra cada tabela e consulte os detalhes da API/URL da tabela. O ident
 
 ## Uso
 
-O dashboard lê registros paginados, oferece busca e formulário dinâmico com os campos da tabela, e envia inclusões/edições diretamente ao NocoDB. Os campos técnicos de auditoria são mantidos fora do formulário. As exclusões não são oferecidas pela interface.
+O dashboard lê registros paginados, oferece busca e formulário dinâmico com os campos da tabela, e envia inclusões/edições diretamente ao NocoDB pela API v2. Os campos técnicos de auditoria são mantidos fora do formulário. As exclusões não são oferecidas pela interface.
