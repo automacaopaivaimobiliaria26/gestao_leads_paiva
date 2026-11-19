@@ -65,11 +65,15 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'PATCH' && recordId) {
         const record = await readBody(req);
         // NocoDB API v2 updates rows through PATCH /records with an Id in each row.
-        return json(res, 200, await nocodb(table, 'PATCH', '', [{ Id: recordId, ...record }]));
+        const id = Number(recordId);
+        if (!Number.isSafeInteger(id)) return json(res, 400, { error: 'ID de registro inválido.' });
+        return json(res, 200, await nocodb(table, 'PATCH', '', [{ ...record, Id: id }]));
       }
       if (req.method === 'DELETE' && recordId) {
         // NocoDB v2 bulk delete accepts record identifiers in the request body.
-        return json(res, 200, await nocodb(table, 'DELETE', '', [{ Id: recordId }]));
+        const id = Number(recordId);
+        if (!Number.isSafeInteger(id)) return json(res, 400, { error: 'ID de registro inválido.' });
+        return json(res, 200, await nocodb(table, 'DELETE', '', [{ Id: id }]));
       }
       return json(res, 405, { error: 'Método não permitido.' });
     } catch (error) { return json(res, error.status || 502, { error: error.message }); }
